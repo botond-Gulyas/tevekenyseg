@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tanulói Pontozás V4 (Mentéssel, Nevekkel, Menü Gombbal)</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
+        h1 { color: #333; text-align: center; }
+        table { width: 100%; border-collapse: collapse; background-color: white; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th { background-color: #007bff; color: white; }
+        .student-name-cell { display: flex; align-items: center; justify-content: space-between; text-align: left; }
+        .add-smiley-btn { background: none; border: none; color: #28a745; font-size: 20px; cursor: pointer; margin-left: 10px; transition: transform 0.1s; }
+        .add-smiley-btn:hover { transform: scale(1.1); }
+        .smiley-log { text-align: left; min-height: 25px; }
+        .comment-input { width: 95%; padding: 5px; border: 1px solid #ccc; border-radius: 4px; }
+        .smiley-btn { font-size: 22px; cursor: pointer; margin: 0 3px; border: none; background: none; }
+        .logged-smiley { cursor: pointer; font-size: 18px; margin: 0 2px; padding: 2px 4px; border-radius: 3px; transition: opacity 0.2s; }
+        .logged-smiley:hover { opacity: 0.8; background-color: #eee; }
+
+        /* Popup stílusok */
+        .popup { display: none; position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 20px; background: white; border: 2px solid #007bff; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); z-index: 1000; max-width: 400px; text-align: center; }
+        .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; }
+        .close-btn { float: right; cursor: pointer; font-size: 18px; color: #aaa; }
+        .save-info { text-align: center; margin-top: 15px; color: #007bff; font-weight: bold; }
+        #comment-display { background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; margin-bottom: 15px; white-space: pre-wrap; text-align: left; }
+        #delete-score-btn { background-color: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; margin-top: 10px; }
+
+        /* Menü Gomb Stílus */
+        .menu-button-container {
+            text-align: right;
+            margin-bottom: 15px;
+        }
+        .menu-button {
+            background-color: #17a2b8; /* Kék-zöld */
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            text-decoration: none; /* Linkként is jól néz ki */
+            transition: background-color 0.2s;
+        }
+        .menu-button:hover {
+            background-color: #138496;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="menu-button-container">
+        <a href="https://ide-jon-a-menupont-url-cime.hu" class="menu-button">
+            ⬅️ Vissza a menübe
+        </a>
+    </div>
+
+    <h1>✨ Tanulói Órai Tevékenység Pontozása</h1>
+    <div class="save-info">
+        (A pontok automatikusan mentésre kerülnek a böngésződben!)
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Sorszám</th>
+                <th>Tanuló Neve</th>
+                <th>Pontok / Smiley-k (Kattints a megjegyzéshez!)</th>
+                <th>Általános Megjegyzés</th>
+            </tr>
+        </thead>
+        <tbody id="score-table-body">
+            </tbody>
+    </table>
+
+    <div class="overlay" id="add-overlay" onclick="closeAddPopup()"></div>
+    <div class="popup" id="add-smiley-popup">
+        <span class="close-btn" onclick="closeAddPopup()">✖</span>
+        <h3>Pont hozzáadása: <span id="popup-student-name"></span></h3>
+        <div style="margin-top: 15px;">
+            <button class="smiley-btn" onclick="addSmileyToStudent('😊')">😊 (Jó)</button>
+            <button class="smiley-btn" onclick="addSmileyToStudent('😐')">😐 (Közepes)</button>
+            <button class="smiley-btn" onclick="addSmileyToStudent('😔')">😔 (Rossz)</button>
+        </div>
+        <textarea id="temp-comment-input" class="comment-input" placeholder="Opcionális megjegyzés ehhez a ponthoz..." style="margin-top: 15px; height: 50px;"></textarea>
+    </div>
+
+    <div class="overlay" id="view-overlay" onclick="closeViewPopup()"></div>
+    <div class="popup" id="view-smiley-popup">
+        <span class="close-btn" onclick="closeViewPopup()">✖</span>
+        <h3>Pont részletei: <span id="view-smiley-icon"></span></h3>
+        <p><strong>Megjegyzés:</strong></p>
+        <div id="comment-display"></div>
+        <p><small id="view-timestamp"></small></p>
+        <button id="delete-score-btn">Pont Törlése</button>
+    </div>
+
+    <script>
+        // ----------------------------------------------------
+        // I. KONSTANS ADATOK
+        // ----------------------------------------------------
+
+        const STUDENT_NAMES = [
+            "Apró Orsolya", "Bálint Áron", "Berecz Bálint", "Borúzs Ádám", "Gulyás Botond", 
+            "Kószó Áron", "Földesi Balázs", "Kis Bicskei Csongor", "Csordás Dorka", "Nyers Enikő", 
+            "Énekes Ferenc", "Mihajlovic Gordon", "Fekete Kiara", "Magosi Jázmin", "Kovács Kira", 
+            "Purda Kyra", "Horvát Lea", "Erős Lilla", "Dimitrijevic Stefan", "Fazekas Viola", 
+            "Kaluderovic Tijana"
+        ];
+        const NUM_STUDENTS = STUDENT_NAMES.length;
+        const STORAGE_KEY = 'studentScoresDataV3'; // A kulcsot megtartjuk az adatok kompatibilitása miatt
+
+        let studentData = [];
+        let currentStudentIndex = -1;
+        let currentScoreIndex = -1;
+
+        // ----------------------------------------------------
+        // II. ADATKEZELÉS (Mentés és Betöltés)
+        // ----------------------------------------------------
+
+        function generateUniqueId() {
+            return Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
+        }
+
+        function saveData() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(studentData));
+        }
+
+        function loadData() {
+            const storedData = localStorage.getItem(STORAGE_KEY);
+            if (storedData) {
+                const loadedData = JSON.parse(storedData);
+                
+                // Megtartja a mentett adatokat, de biztosítja, hogy a jelenlegi névlista alapján épüljön fel a tábla
+                studentData = STUDENT_NAMES.map((name, index) => {
+                    const existing = loadedData.find(s => s.name === name);
+                    if (existing) {
+                        return existing; 
+                    } else {
+                        return { 
+                            id: index + 1,
+                            name: name,
+                            scores: [],
+                            notes: ''
+                        };
+                    }
+                });
+            } else {
+                // Kezdeti adatok létrehozása az előre definiált nevekkel
+                STUDENT_NAMES.forEach((name, index) => {
+                    studentData.push({
+                        id: index + 1,
+                        name: name,
+                        scores: [],
+                        notes: ''
+                    });
+                });
+            }
+        }
+
+        // ----------------------------------------------------
+        // III. FELÜLET KEZELÉS ÉS TÖRLÉS
+        // ----------------------------------------------------
+
+        function renderTable() {
+            const tbody = document.getElementById('score-table-body');
+            tbody.innerHTML = '';
+
+            studentData.forEach((student, studentIdx) => {
+                const row = tbody.insertRow();
+                row.className = 'student-row';
+                
+                row.insertCell().textContent = student.id + '.';
+                
+                const nameCell = row.insertCell();
+                nameCell.className = 'student-name-cell';
+                nameCell.innerHTML = `
+                    <input type="text" value="${student.name}" class="comment-input" onchange="updateStudentName(${studentIdx}, this.value)" style="text-align: left;">
+                    <button class="add-smiley-btn" onclick="openAddPopup(${studentIdx})">+</button>
+                `;
+                
+                const scoreCell = row.insertCell();
+                scoreCell.className = 'smiley-log';
+                scoreCell.id = `scores-${studentIdx}`;
+                
+                student.scores.forEach((score, scoreIdx) => {
+                    scoreCell.innerHTML += `<span 
+                        class="logged-smiley" 
+                        onclick="openViewPopup(${studentIdx}, ${scoreIdx})"
+                        title="Kattints a részletekért és törléshez"
+                        data-score-id="${score.uniqueId}"
+                    >${score.icon}</span>`;
+                });
+
+                const noteCell = row.insertCell();
+                noteCell.innerHTML = `<input type="text" class="comment-input" value="${student.notes}" onchange="updateStudentNotes(${studentIdx}, this.value)" placeholder="Általános megjegyzés...">`;
+            });
+        }
+
+        // ----------------------------------------------------
+        // IV. POPUP KEZELÉSEK (HOZZÁADÁS)
+        // ----------------------------------------------------
+        
+        function openAddPopup(index) {
+            currentStudentIndex = index;
+            document.getElementById('popup-student-name').textContent = studentData[index].name;
+            document.getElementById('temp-comment-input').value = '';
+            document.getElementById('add-overlay').style.display = 'block';
+            document.getElementById('add-smiley-popup').style.display = 'block';
+        }
+
+        function closeAddPopup() {
+            document.getElementById('add-overlay').style.display = 'none';
+            document.getElementById('add-smiley-popup').style.display = 'none';
+            currentStudentIndex = -1;
+        }
+
+        function addSmileyToStudent(icon) {
+            if (currentStudentIndex === -1) return;
+
+            const comment = document.getElementById('temp-comment-input').value.trim();
+            const now = new Date();
+            
+            studentData[currentStudentIndex].scores.push({
+                uniqueId: generateUniqueId(),
+                icon: icon,
+                comment: comment,
+                timestamp: now.toLocaleString()
+            });
+
+            saveData();
+            renderTable();
+            closeAddPopup();
+        }
+
+        // ----------------------------------------------------
+        // V. POPUP KEZELÉSEK (MEGTEKINTÉS ÉS TÖRLÉS)
+        // ----------------------------------------------------
+
+        function openViewPopup(studentIdx, scoreIdx) {
+            currentStudentIndex = studentIdx;
+            currentScoreIndex = scoreIdx;
+            const score = studentData[studentIdx].scores[scoreIdx];
+
+            document.getElementById('view-smiley-icon').textContent = studentData[studentIdx].name + " - " + score.icon;
+            document.getElementById('comment-display').textContent = score.comment || 'Nincs megjegyzés.';
+            document.getElementById('view-timestamp').textContent = `Időpont: ${score.timestamp}`;
+
+            document.getElementById('delete-score-btn').onclick = deleteScore;
+
+            document.getElementById('view-overlay').style.display = 'block';
+            document.getElementById('view-smiley-popup').style.display = 'block';
+        }
+
+        function closeViewPopup() {
+            document.getElementById('view-overlay').style.display = 'none';
+            document.getElementById('view-smiley-popup').style.display = 'none';
+            currentStudentIndex = -1;
+            currentScoreIndex = -1;
+        }
+
+        function deleteScore() {
+            if (currentStudentIndex !== -1 && currentScoreIndex !== -1) {
+                studentData[currentStudentIndex].scores.splice(currentScoreIndex, 1);
+                
+                saveData();
+                renderTable();
+                closeViewPopup();
+            }
+        }
+
+        // ----------------------------------------------------
+        // VI. EGYÉB FUNKCIÓK
+        // ----------------------------------------------------
+
+        function updateStudentName(index, newName) {
+            studentData[index].name = newName;
+            saveData();
+        }
+
+        function updateStudentNotes(index, newNote) {
+            studentData[index].notes = newNote;
+            saveData();
+        }
+
+        // ----------------------------------------------------
+        // VII. INDÍTÁS
+        // ----------------------------------------------------
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            renderTable();
+            window.addEventListener('beforeunload', saveData);
+        });
+        
+    </script>
+
+</body>
+</html>
